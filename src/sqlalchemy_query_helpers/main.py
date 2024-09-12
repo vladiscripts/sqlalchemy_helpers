@@ -11,6 +11,7 @@ class DB:
     is_updated = False
     name: str
     base: DeclarativeMeta = None
+    engine = None
 
     def __init__(self, db_name, base: DeclarativeMeta, use_os_env=False, echo=False):
         self.base = base
