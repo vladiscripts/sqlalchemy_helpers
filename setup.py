@@ -2,19 +2,19 @@ from setuptools import setup, find_packages
 
 
 def readme():
-    with open('README.md', 'r') as f:
+    with open('README.md') as f:
         return f.read()
 
 
 setup(
-    name='sqlalchemy_helpers',
+    name='sqlalchemyhelpers',
     version='1.0.0',
     author='vladiscripts',
     author_email='blagopoluchie12@gmail.com',
     description='Some helpers for sSQLAlchemy',
     long_description=readme(),
     long_description_content_type='text/markdown',
-    url='https://github.com/vladiscripts/sqlalchemy_helpers',
+    url='https://github.com/vladiscripts/sqlalchemyhelpers',
     packages=find_packages(),
     install_requires=['sqlalchemy'],
     classifiers=[
@@ -24,7 +24,7 @@ setup(
     ],
     keywords='sqlalchemy',
     project_urls={
-        'Documentation': 'https://github.com/vladiscripts/sqlalchemy_helpers'
+        'Documentation': 'https://github.com/vladiscripts/sqlalchemyhelpers'
     },
     python_requires='>=3.10'
 )
