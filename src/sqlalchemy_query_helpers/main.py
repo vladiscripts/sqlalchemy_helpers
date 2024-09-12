@@ -1,5 +1,5 @@
 from sqlalchemy import create_engine, MetaData, Table, select
-from sqlalchemy.orm import sessionmaker, Query, DeclarativeMeta
+from sqlalchemy.orm import sessionmaker, Query, DeclarativeMeta, session
 from sqlalchemy.orm.attributes import InstrumentedAttribute
 from sqlalchemy.dialects.mysql import insert
 from sqlalchemy.exc import IntegrityError
@@ -12,6 +12,8 @@ class DB:
     name: str
     base: DeclarativeMeta = None
     engine = None
+    Session: sessionmaker = None
+    session: session.Session = None
 
     def __init__(self, db_name, base: DeclarativeMeta, use_os_env=False, echo=False):
         self.base = base
