@@ -1,0 +1,18 @@
+[project]
+name = "sqlalchemyhelpers"
+version = "1.0.0"
+authors = [
+    { name = "vladiscripts", email = "blagopoluchie12@gmail.com" },
+]
+description = "Some helpers for SQLAlchemy"
+readme = "README.md"
+requires-python = ">=3.10"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+
+[project.urls]
+Homepage = "https://github.com/vladiscripts/sqlalchemyhelpers"
+Issues = "https://github.com/vladiscripts/sqlalchemyhelpers/issues"
