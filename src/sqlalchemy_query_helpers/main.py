@@ -1,5 +1,6 @@
 from sqlalchemy import create_engine, MetaData, Table, select
 from sqlalchemy.orm import sessionmaker, Query, DeclarativeMeta, session
+from sqlalchemy.orm.session import Session
 from sqlalchemy.orm.attributes import InstrumentedAttribute
 from sqlalchemy.dialects.mysql import insert
 from sqlalchemy.exc import IntegrityError
@@ -13,14 +14,14 @@ class DB:
     base: DeclarativeMeta = None
     engine = None
     Session: sessionmaker = None
-    session: session.Session = None
+    session: Session = None
 
-    def __init__(self, db_name, base: DeclarativeMeta, use_os_env=False, echo=False):
+    def __init__(self, db_name, base: DeclarativeMeta, use_os_env=True, echo=False):
         self.base = base
         engine_str = self.make_engine_str(use_os_env)
         self.engine = create_engine(f'{engine_str}/{db_name}', echo=echo)
         self.Session = sessionmaker(bind=self.engine)
-        self.session = self.Session()
+        # self.session = self.Session()
 
         base.metadata.create_all(self.engine)  # create tables and index if not exists
         self.name = self.engine.url.database
@@ -47,8 +48,8 @@ class DB:
         engine_str = f'mysql+pymysql://{user}:{password}@{host}'
         return engine_str
 
-    def get_predifined_table(self, table_name: str, base_metadata):
-        table = Table(table_name, base_metadata, autoload_with=self.engine)
+    def get_predefined_table(self, table_name: str, base_metadata=None):
+        table = Table(table_name, base_metadata or declarative_base().metadata, autoload_with=self.engine)
         return table
 
     @staticmethod
@@ -143,16 +144,14 @@ class DB:
         self.insert_ignore_many_core(t, [row], mfields)
 
     def insert_ignore_many_core(self, t, rows: List[Union[dict, list, tuple]], mfields: Union[list, tuple] = None) -> None:
-        """Core instead ORM. IGNORE can ignore don't only doubles but other errors. Many warnings."""
-        # for row in rows:
-        #     row = self.to_dict(row, mfields)
-        #     # self.session.execute(insert(t, values=row, prefixes=['IGNORE']))
-        #     s = insert(t).values(row).prefix_with('IGNORE', dialect='mysql')
-        #     # self.session.execute(s)
+        """If can better use upsert, or insert after select with filtering exists rows. Problems of IGNORE: 
+        * This make very large skips of row ids in table.
+        * Can ignore don't only doubles but other errors. Many warnings."""
         rows_to_insert = [self.__to_dict(row, mfields) for row in rows]
         q = insert(t).values(rows_to_insert).prefix_with('IGNORE', dialect='mysql')
-        self.session.execute(q)
-        self.session.commit()
+        with self.Session() as session:
+            session.execute(q)
+            session.commit()
 
     def insert_ignore_instanses(self, instances):
         if not isinstance(instances, Iterable): instances = (instances,)
@@ -225,12 +224,25 @@ class DB:
         self.session.commit()
         return is_updated, is_inserted
 
-    def upsert(self, t, rows: Union[list[dict], tuple[dict]], mfields=None):
+    def upsert(self, t, rows: Union[list[dict], tuple[dict]], mfields=None, do_commit=True, filter_unque_primary_keys=True):
         rows_to_insert = [self.__to_dict(row, mfields) for row in rows]
         stmt = insert(t).values(rows_to_insert)
-        update_dict = {x.name: x for x in stmt.inserted}
+        # need to remove primary or unique keys on using, else will error
+        if filter_unque_primary_keys:
+            update_dict = {x.name: x for x in stmt.inserted for c in t._sa_class_manager.mapper.columns._all_columns
+                           if x.name == c.name and c.unique is not True and c.primary_key is not True}
+        else:
+            update_dict = {x.name: x for x in stmt.inserted}
+        if not update_dict:
+            return
         upsert_query = stmt.on_duplicate_key_update(update_dict)
-        self.session.execute(upsert_query)
+        with self.Session() as session:
+            session.execute(upsert_query)
+            if do_commit:
+                try:
+                    session.commit()
+                except Exception as e:
+                    session.rollback()
 
     # def upsert(self, t, row, mfields=None):
     #     row = self.to_dict(row, mfields)

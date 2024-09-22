@@ -11,8 +11,8 @@
 * `engine` - подключение к базе данных
 * `name` - имя базы данных
 * `base`: DeclarativeMeta
-* `Session: sessionmaker`
-* `session: session.Session`
+* `Session: sessionmaker` - фабрика сессий
+* `session: Session` - инициализированная сессия
 
 ## Пример использования
 
