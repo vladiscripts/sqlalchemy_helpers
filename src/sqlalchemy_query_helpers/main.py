@@ -27,7 +27,8 @@ class DB:
         self.name = self.engine.url.database
 
     def __del__(self):
-        self.session.close()
+        if self.session:
+            self.session.close()
 
     @staticmethod
     def make_engine_str(use_os_env) -> str:
