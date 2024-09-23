@@ -230,7 +230,8 @@ class DB:
         stmt = insert(t).values(rows_to_insert)
         # need to remove primary or unique keys on using, else will error
         if filter_unque_primary_keys:
-            update_dict = {x.name: x for x in stmt.inserted for c in t._sa_class_manager.mapper.columns._all_columns
+            table_columns = t.columns._all_columns if isinstance(t, Table) else t._sa_class_manager.mapper.columns._all_columns
+            update_dict = {x.name: x for x in stmt.inserted for c in table_columns
                            if x.name == c.name and c.unique is not True and c.primary_key is not True}
         else:
             update_dict = {x.name: x for x in stmt.inserted}
