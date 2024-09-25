@@ -16,9 +16,15 @@ class DB:
     Session: sessionmaker = None
     session: Session = None
 
-    def __init__(self, db_name, base: DeclarativeMeta, use_os_env=True, echo=False):
+    def __init__(self, db_name, base: DeclarativeMeta, db_url: str | None = None, echo=False):
+        """
+        :param db_url: URL as "{user}:{password}@{host}" without [schema + netloc], 
+            that will use as f'mysql+pymysql://{db_url}'. 
+            It's convenient to store this string as an OS environment variable.
+            None - Use OS environment variables: 'DB_USER', 'DB_PASSWORD', 'DB_HOST'.
+        """
         self.base = base
-        engine_str = self.make_engine_str(use_os_env)
+        engine_str = self.make_engine_str(db_url)
         self.engine = create_engine(f'{engine_str}/{db_name}', echo=echo)
         self.Session = sessionmaker(bind=self.engine)
         # self.session = self.Session()
@@ -31,12 +37,14 @@ class DB:
             self.session.close()
 
     @staticmethod
-    def make_engine_str(use_os_env) -> str:
+    def make_engine_str(db_url: str | None) -> str:
         """
         Create an engine string (schema + netloc), like "mysql+pymysql://USER:PASSWORD@HOST"
-        :param use_os_env: Use OS envs 'DB_USER', 'DB_PASSWORD', 'DB_HOST', instead the `cfg.py` file
+        :param db_url: URL as "{user}:{password}@{host}" that will use as f'mysql+pymysql://{db_url}'. 
+            It's convenient to store this string as an OS environment variable.
+            None - Use OS environment variables: 'DB_USER', 'DB_PASSWORD', 'DB_HOST'.
         """
-        if use_os_env:
+        if not db_url:
             import os
             try:
                 user = os.environ['DB_USER']
@@ -44,9 +52,9 @@ class DB:
                 host = os.environ['DB_HOST']
             except KeyError:
                 raise RuntimeError("Set the 'DB_USER', 'DB_PASSWORD', 'DB_HOST' OS env variables")
+            engine_str = f'mysql+pymysql://{user}:{password}@{host}'
         else:
-            from cfg import user, password, host
-        engine_str = f'mysql+pymysql://{user}:{password}@{host}'
+            engine_str = f'mysql+pymysql://{db_url}'
         return engine_str
 
     def get_predefined_table(self, table_name: str, base_metadata=None):
