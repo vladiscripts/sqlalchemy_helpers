@@ -123,8 +123,15 @@ class DB:
 
     def insert_many(self, t, rows: Union[list, tuple], mfields: Union[list, tuple] = None, do_commit=True):
         dicts = [self.__to_dict(row, mfields, use_orm_keys=True) for row in rows]
+        if not dicts:
+            return
+
         with self.Session() as session:
-            session.bulk_insert_mappings(t, dicts)
+            if hasattr(t, '_sa_class_manager'):  # ORM-модель
+                session.bulk_insert_mappings(t, dicts)
+            else:  # Table
+                stmt = insert(t).values(dicts)
+                session.execute(stmt)
             if do_commit:
                 session.commit()
 
