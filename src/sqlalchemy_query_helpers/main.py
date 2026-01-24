@@ -217,15 +217,40 @@ class DB:
             'skipped': [...]    # без изменений
         }
         """
-        if not rows:
-            return {'inserted': [], 'updated': [], 'skipped': []}
+        from decimal import Decimal
+        import datetime as dt
 
-        if not cause_keys:
-            raise ValueError("cause_keys cannot be empty")
+        def _values_equal(a, b) -> bool:
+            """
+            Сравнивает два значения как 'равные' с точки зрения бизнес-логики и SQL.
+            Важно: не использует float() для Decimal, чтобы избежать потерь.
+            """
+            if a is None and b is None:
+                return True
+            if a is None or b is None:
+                return False
+
+            # Случай: int, float, Decimal — сравниваем как числа
+            numeric_types = (int, float, Decimal)
+            if isinstance(a, numeric_types) and isinstance(b, numeric_types):
+                # Приводим к Decimal для точного сравнения
+                try:
+                    dec_a = Decimal(a) if not isinstance(a, Decimal) else a
+                    dec_b = Decimal(b) if not isinstance(b, Decimal) else b
+                    return dec_a == dec_b
+                except (InvalidOperation, TypeError):
+                    return False  # если не удалось привести
+
+            # Случай: дата/время
+            datetime_types = (dt.date, dt.datetime, dt.time)
+            if isinstance(a, datetime_types) and isinstance(b, datetime_types):
+                return a == b
+
+            # Все остальное — строгое сравнение
+            return a == b
 
         dicts = [self.__to_dict(row, mfields, use_orm_keys=True) for row in rows]
 
-        # Определяем, является ли t ORM-моделью или Table
         is_orm_model = hasattr(t, '_sa_class_manager')
         is_table = isinstance(t, Table)
         if not (is_orm_model or is_table):
@@ -245,13 +270,15 @@ class DB:
             else:
                 raise TypeError(f"Unsupported cause_keys element: {type(key)}")
 
-        # Формируем ключи для поиска: tuple из значений cause_keys
         def make_key(row):
-            return tuple(row[k] for k in key_names)
+            if isinstance(row, dict):
+                return tuple(row[k] for k in key_names)
+            else:
+                return tuple(getattr(row, k) for k in key_names)
 
         update_candidates = [(row, make_key(row)) for row in dicts]
 
-        # === 1. Массовый SELECT для поиска существующих записей ===
+        # === 1. Массовый SELECT ===
         existing = {}
         keys_to_find = [key for _, key in update_candidates]
         if keys_to_find:
@@ -272,7 +299,7 @@ class DB:
                     key = make_key(row)
                     existing[key] = row
 
-        # === 2. Сравнение и разделение ===
+        # === 2. Сравнение ===
         inserted = []
         updated = []
         skipped = []
@@ -280,25 +307,32 @@ class DB:
         for row_dict, key in update_candidates:
             if key in existing:
                 db_row = existing[key]
-                if any(db_row[k] != v for k, v in row_dict.items()):
+                do_update = False
+                for k, v in row_dict.items():
+                    if k in key_names:
+                        continue
+                    db_val = getattr(db_row, k) if not isinstance(db_row, dict) else db_row[k]
+                    if not _values_equal(db_val, v):
+                        do_update = True
+                        break
+                if do_update:
                     updated.append(row_dict)
                 else:
                     skipped.append(row_dict)
             else:
                 inserted.append(row_dict)
 
-        # === 3. Пакетная вставка и обновление через ON DUPLICATE KEY UPDATE ===
+        # === 3. Пакетная вставка/обновление ===
         if inserted or updated:
             combined = inserted + updated
             stmt = insert(t).values(combined)
 
-            # Определяем, какие колонки можно обновлять (не ключевые)
             if is_orm_model:
                 cols = t.__table__.columns
             else:
                 cols = t.columns
             upsert_cols = [c.name for c in cols if not (c.primary_key or c.unique)]
-            update_dict = {col: getattr(stmt.inserted, col) for col in upsert_cols}
+            update_dict = {col: getattr(stmt.inserted, col) for col in upsert_cols if col not in key_names}
 
             if update_dict:
                 upsert_query = stmt.on_duplicate_key_update(update_dict)
